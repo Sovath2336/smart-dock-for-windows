@@ -28,7 +28,7 @@ The Windows taskbar is a wide strip that is always there, always growing, and al
  │ GridSnip  Repo…  Terminal  Docs│
  │                              │
  │  📈      ▮_                  │
- │ ASYCUDA  Build…              │
+ │ Notepad  Build…              │
  │                              │
  └──────────────────────────────┘
         collapsed:  [ 6 windows  [ SHOW ] ]
