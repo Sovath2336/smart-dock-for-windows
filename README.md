@@ -136,3 +136,21 @@ Choose a license for the repo (MIT is a common pick for scripts like this) and a
 <div align="center">
 <sub>Built with PowerShell, a little COM, and a strong dislike of cluttered taskbars.</sub>
 </div>
+
+## 📦 Installer
+
+Prefer a normal installer? Build one (no extra tools needed, it uses the C# compiler that ships with Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+```
+
+That produces `dist\SmartDock-Setup.exe` (about 60 KB):
+
+- Installs per user into `%LOCALAPPDATA%\Programs\Smart Dock`. No admin rights.
+- Options for start-with-Windows, a Start menu shortcut and a desktop shortcut.
+- Adds an entry in **Settings → Apps** and an `Uninstall.exe`. Uninstalling also puts the taskbar buttons back.
+- Silent mode: `SmartDock-Setup.exe /S` (optionally `/dir="D:\Apps\Smart Dock"`).
+- The installed `SmartDock.exe` is a tiny launcher that starts the script with no console window.
+
+> The exe is unsigned, so SmartScreen may show a warning the first time. Choose **More info → Run anyway**.

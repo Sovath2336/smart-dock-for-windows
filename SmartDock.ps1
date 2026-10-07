@@ -414,7 +414,11 @@ public class DockForm : Form
         using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, true))
         {
             if (on && ScriptPath.Length > 0)
-                k.SetValue("SmartDock", "powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + ScriptPath + "\"");
+            {
+                string exe = Path.Combine(Path.GetDirectoryName(ScriptPath), "SmartDock.exe");   // installed build: use the hidden launcher
+                k.SetValue("SmartDock", File.Exists(exe) ? "\"" + exe + "\""
+                    : "powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + ScriptPath + "\"");
+            }
             else k.DeleteValue("SmartDock", false);
         }
     }
