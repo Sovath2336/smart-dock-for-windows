@@ -67,7 +67,9 @@ Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-STA','
 
 ## 🔁 Start at logon
 
-Press `Win + R`, run `shell:startup`, and drop in a shortcut with:
+The easy way: click the **gear** in the dock header and tick **Start with Windows**. (It writes a `Run` entry for the current user, so no admin rights are needed.)
+
+The manual way: press `Win + R`, run `shell:startup`, and drop in a shortcut with:
 
 - **Target:** `powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path	o\SmartDock.ps1"`
 - **Run:** Minimized
@@ -82,6 +84,7 @@ Launching it twice is safe: a second instance exits immediately. To stop autosta
 | **Right-click a tile** | `Close window` · `Minimize` · `Show in taskbar` |
 | **Drag the top strip** | Moves the dock. |
 | **HIDE / SHOW button** | Collapses or expands the dock. |
+| **Gear button** (next to HIDE) | Opens the settings menu: `Start with Windows` toggle, `Auto-hide taskbar`, `Collapse / Expand`, `Exit dock` |
 | **Right-click the top strip** | `Collapse / Expand` · `Return … to dock` · `Auto-hide taskbar` · `Exit dock` |
 | **Mouse wheel** | Scrolls the grid by one row. |
 

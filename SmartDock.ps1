@@ -12,6 +12,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
+using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
@@ -44,6 +46,8 @@ public class DockForm : Form
     [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint m, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] static extern IntPtr GetClassLongPtr(IntPtr h, int idx);
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint PrivateExtractIcons(string file, int idx, int cx, int cy, IntPtr[] icons, uint[] ids, uint n, uint flags);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);
     [DllImport("shell32.dll")] static extern UIntPtr SHAppBarMessage(uint msg, ref APPBARDATA d);
@@ -55,7 +59,10 @@ public class DockForm : Form
     readonly ToolTip tip = new ToolTip();
     int scroll = 0, hover = -1, side;
     bool origAutoHide, changedAutoHide, collapsed;
-    const int CollapsedW = 170;
+    const int CollapsedW = 204;
+    public static string ScriptPath = "";
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    readonly Font gearFont = new Font("Segoe UI Symbol", 15f);
     IntPtr lastTarget = IntPtr.Zero;
     readonly Font small = new Font("Segoe UI", 7f);
     readonly Font barFont = new Font("Segoe UI", 9f, FontStyle.Bold);
@@ -117,19 +124,44 @@ public class DockForm : Form
     }
     static string TitleOf(IntPtr h) { StringBuilder sb = new StringBuilder(256); GetWindowText(h, sb, 256); return sb.ToString(); }
 
+    // High-resolution (64px) icon straight from the executable, so it can be scaled down sharply.
+    static Bitmap ExeIcon(string path)
+    {
+        IntPtr[] arr = new IntPtr[1]; uint[] ids = new uint[1];
+        uint n = PrivateExtractIcons(path, 0, 64, 64, arr, ids, 1, 0);
+        if (n == 0 || arr[0] == IntPtr.Zero) return null;
+        try
+        {
+            using (Icon i = Icon.FromHandle(arr[0]))
+            using (Bitmap src = i.ToBitmap())
+            {
+                Bitmap bm = new Bitmap(64, 64, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (Graphics g = Graphics.FromImage(bm))
+                {
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    g.DrawImage(src, 0, 0, 64, 64);
+                }
+                return bm;
+            }
+        }
+        finally { DestroyIcon(arr[0]); }
+    }
+
     Bitmap IconOf(IntPtr h)
     {
+        try   // prefer the exe's big icon (UWP frames share one host exe, so use the window icon there)
+        {
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            Process p = Process.GetProcessById((int)pid);
+            if (p.ProcessName != "ApplicationFrameHost") { Bitmap b = ExeIcon(p.MainModule.FileName); if (b != null) return b; }
+        }
+        catch { }
         IntPtr ic = IntPtr.Zero;
         SendMessageTimeout(h, 0x7F, (IntPtr)1, IntPtr.Zero, 2, 100, out ic);
         if (ic == IntPtr.Zero) SendMessageTimeout(h, 0x7F, (IntPtr)2, IntPtr.Zero, 2, 100, out ic);
         if (ic == IntPtr.Zero) ic = GetClassLongPtr(h, -14);
-        try
-        {
-            if (ic != IntPtr.Zero) { using (Icon i = Icon.FromHandle(ic)) return new Bitmap(i.ToBitmap(), 32, 32); }
-            uint pid; GetWindowThreadProcessId(h, out pid);
-            string path = Process.GetProcessById((int)pid).MainModule.FileName;
-            using (Icon i = Icon.ExtractAssociatedIcon(path)) return new Bitmap(i.ToBitmap(), 32, 32);
-        }
+        try { if (ic != IntPtr.Zero) { using (Icon i = Icon.FromHandle(ic)) return new Bitmap(i.ToBitmap()); } }
         catch { }
         return null;
     }
@@ -174,6 +206,23 @@ public class DockForm : Form
         Top = bottom - Height;           // keep bottom-left corner anchored
         Invalidate();
     }
+    static string StartupLnk { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Smart Dock.lnk"); } }
+    static bool AutoStartOn()
+    {
+        using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey)) { if (k != null && k.GetValue("SmartDock") != null) return true; }
+        return File.Exists(StartupLnk);
+    }
+    static void SetAutoStart(bool on)
+    {
+        try { if (File.Exists(StartupLnk)) File.Delete(StartupLnk); } catch { }   // avoid a duplicate entry
+        using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, true))
+        {
+            if (on && ScriptPath.Length > 0)
+                k.SetValue("SmartDock", "powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + ScriptPath + "\"");
+            else k.DeleteValue("SmartDock", false);
+        }
+    }
+    Rectangle GearRect { get { return new Rectangle(Width - 62 - 34, 3, 30, Bar - 6); } }
     Rectangle ToggleRect { get { return new Rectangle(Width - 62, 3, 58, Bar - 6); } }
     int HitTest(Point p)
     {
@@ -186,10 +235,15 @@ public class DockForm : Form
     {
         Graphics g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         using (Brush bb = new SolidBrush(Color.FromArgb(48, 48, 54))) g.FillRectangle(bb, 0, 0, Width, Bar);
         g.DrawString(items.Count + " windows", barFont, Brushes.Gainsboro, 8, 5);
         using (Brush tb2 = new SolidBrush(collapsed ? Color.FromArgb(40, 150, 90) : Color.FromArgb(50, 110, 200))) g.FillRectangle(tb2, ToggleRect);
+        using (Brush gb = new SolidBrush(Color.FromArgb(70, 70, 82))) g.FillRectangle(gb, GearRect);
+        StringFormat gf = new StringFormat(); gf.Alignment = StringAlignment.Center; gf.LineAlignment = StringAlignment.Center;
+        g.DrawString("\u2699", gearFont, Brushes.White, GearRect, gf);
         StringFormat bf = new StringFormat(); bf.Alignment = StringAlignment.Center; bf.LineAlignment = StringAlignment.Center;
         g.DrawString(collapsed ? "SHOW" : "HIDE", barFont, Brushes.White, ToggleRect, bf);
         using (Pen border = new Pen(Color.FromArgb(70, 70, 78))) g.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
@@ -202,7 +256,7 @@ public class DockForm : Form
             Rectangle inner = Rectangle.Inflate(r, -2, -2);
             if (i == hover) using (Brush hb = new SolidBrush(Color.FromArgb(70, 70, 80))) g.FillRectangle(hb, inner);
             if (items[i].H == lastTarget) using (Pen ap = new Pen(Color.FromArgb(90, 160, 255), 2)) g.DrawRectangle(ap, inner);
-            if (items[i].Icon != null) g.DrawImage(items[i].Icon, r.X + (Tile - 32) / 2, r.Y + 6, 32, 32);
+            if (items[i].Icon != null) g.DrawImage(items[i].Icon, r.X + (Tile - 36) / 2, r.Y + 4, 36, 36);
             g.DrawString(items[i].Title, small, Brushes.Gainsboro, new RectangleF(r.X + 2, r.Y + 41, Tile - 4, 14), sf);
         }
         int totalRows = (items.Count + Cols - 1) / Cols;
@@ -221,6 +275,7 @@ public class DockForm : Form
         if (e.Y < Bar)
         {
             if (e.Button == MouseButtons.Left && ToggleRect.Contains(e.Location)) { ToggleCollapse(); return; }
+            if (e.Button == MouseButtons.Left && GearRect.Contains(e.Location)) { BarMenu(new Point(GearRect.Left, Bar)); return; }
             if (e.Button == MouseButtons.Left) { ReleaseCapture(); SendMessage(Handle, 0xA1, (IntPtr)2, IntPtr.Zero); }
             else if (e.Button == MouseButtons.Right) BarMenu(e.Location);
             return;
@@ -252,6 +307,10 @@ public class DockForm : Form
         ah.Click += delegate { bool on = !ah.Checked; SetAutoHide(on); changedAutoHide = (on != origAutoHide); };
         m.Items.Add(collapsed ? "Expand" : "Collapse", null, delegate { ToggleCollapse(); });
         if (released.Count > 0) m.Items.Add("Return " + released.Count + " taskbar window(s) to dock", null, delegate { released.Clear(); Refresh_(); });
+        ToolStripMenuItem au = new ToolStripMenuItem("Start with Windows");
+        au.Checked = AutoStartOn();
+        au.Click += delegate { SetAutoStart(!au.Checked); };
+        m.Items.Add(au);
         m.Items.Add(ah);
         m.Items.Add("Exit dock", null, delegate { Close(); });
         m.Show(this, p);
@@ -290,4 +349,4 @@ public class DockForm : Form
     public static void RunDock() { Application.EnableVisualStyles(); Application.Run(new DockForm()); }
 }
 '@
-if ($Restore) { [DockForm]::RestoreAll() } else { [DockForm]::RunDock() }
+if ($Restore) { [DockForm]::RestoreAll() } else { [DockForm]::ScriptPath = $PSCommandPath; [DockForm]::RunDock() }
