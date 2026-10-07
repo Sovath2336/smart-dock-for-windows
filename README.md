@@ -44,7 +44,7 @@ The Windows taskbar is a wide strip that is always there, always growing, and al
 | 📥 **Return everything** | Right-click the top strip → **Return N taskbar window(s) to dock**. |
 | 🪗 **Collapsible** | One big **HIDE / SHOW** button shrinks the dock to a slim pill. It stays anchored to its bottom-left corner. |
 | 🧞 **Genie animation** | Click the active window's tile and it folds into the dock like the macOS genie. Click again and it unfolds back out. Toggle it in the gear menu. |
-| ⏬ **Minimize all** | One button in the header minimizes every window in the dock. |
+| ⏬ **Minimize / restore all** | One header button minimizes every window in the dock. When everything is already minimized, it turns into a restore button and brings them all back. |
 | 🖼️ **Taskbar-style clicks** | Click a tile to focus its window, click the active one to minimize it, click a minimized one to restore it. |
 | 🖱️ **Draggable** | Grab the top strip and put it anywhere. |
 | ⚡ **Live** | Opens, closes, renames and new windows are picked up automatically (every ~0.7 s). The active window is outlined in blue. |

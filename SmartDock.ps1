@@ -241,6 +241,7 @@ public class DockForm : Form
     ITaskbarList tb;
     readonly Dictionary<IntPtr, Snap> snaps = new Dictionary<IntPtr, Snap>();
     string barTip = "";
+    bool lastAllMin;
     readonly List<IntPtr> released = new List<IntPtr>();   // windows the user moved back to the taskbar
     readonly List<DockItem> items = new List<DockItem>();
     readonly ToolTip tip = new ToolTip();
@@ -380,6 +381,8 @@ public class DockForm : Form
         if (fg != Handle && items.Exists(delegate(DockItem x) { return x.H == fg; }) && fg != lastTarget) { lastTarget = fg; dirty = true; }
         int maxScroll = Math.Max(0, (items.Count + Cols - 1) / Cols - Rows);
         if (scroll > maxScroll) { scroll = maxScroll; dirty = true; }
+        bool am = AllMinimized;
+        if (am != lastAllMin) { lastAllMin = am; dirty = true; }   // flip the button icon when the state changes
         if (dirty) Invalidate();
     }
 
@@ -417,10 +420,26 @@ public class DockForm : Form
     }
     Rectangle GearRect { get { return new Rectangle(Width - 62 - 34, 3, 30, Bar - 6); } }
     Rectangle MinAllRect { get { return new Rectangle(Width - 62 - 34 - 34, 3, 30, Bar - 6); } }
-    void MinimizeAll()
+    bool AllMinimized
     {
-        foreach (DockItem it in items) if (IsWindow(it.H) && !IsIconic(it.H)) ShowWindow(it.H, 7);   // minimize without stealing focus
-        lastTarget = IntPtr.Zero; Invalidate();
+        get
+        {
+            if (items.Count == 0) return false;
+            foreach (DockItem it in items) if (IsWindow(it.H) && !IsIconic(it.H)) return false;
+            return true;
+        }
+    }
+    // One button, two jobs: everything minimized -> restore all; otherwise -> minimize all.
+    void ToggleAll()
+    {
+        bool restore = AllMinimized;
+        foreach (DockItem it in items)
+        {
+            if (!IsWindow(it.H)) continue;
+            if (restore) ShowWindow(it.H, 4);                    // back to previous size/position, no focus steal
+            else if (!IsIconic(it.H)) ShowWindow(it.H, 7);       // minimize without stealing focus
+        }
+        lastTarget = IntPtr.Zero; lastAllMin = !restore && AllMinimized; Invalidate();
     }
     Rectangle ToggleRect { get { return new Rectangle(Width - 62, 3, 58, Bar - 6); } }
     Rectangle TargetRect(int index)
@@ -448,7 +467,11 @@ public class DockForm : Form
         using (Brush tb2 = new SolidBrush(collapsed ? Color.FromArgb(40, 150, 90) : Color.FromArgb(50, 110, 200))) g.FillRectangle(tb2, ToggleRect);
         using (Brush gb = new SolidBrush(Color.FromArgb(70, 70, 82))) g.FillRectangle(gb, GearRect);
         using (Brush mb = new SolidBrush(Color.FromArgb(70, 70, 82))) g.FillRectangle(mb, MinAllRect);
-        g.FillRectangle(Brushes.White, MinAllRect.X + MinAllRect.Width / 2 - 7, MinAllRect.Y + MinAllRect.Height - 8, 14, 3);
+        if (lastAllMin)   // everything minimized: show a "restore" glyph (a window outline)
+        {
+            using (Pen wp = new Pen(Color.White, 2)) g.DrawRectangle(wp, MinAllRect.X + MinAllRect.Width / 2 - 6, MinAllRect.Y + 5, 12, 9);
+        }
+        else g.FillRectangle(Brushes.White, MinAllRect.X + MinAllRect.Width / 2 - 7, MinAllRect.Y + MinAllRect.Height - 8, 14, 3);
         StringFormat gf = new StringFormat(); gf.Alignment = StringAlignment.Center; gf.LineAlignment = StringAlignment.Center;
         g.DrawString("\u2699", gearFont, Brushes.White, GearRect, gf);
         StringFormat bf = new StringFormat(); bf.Alignment = StringAlignment.Center; bf.LineAlignment = StringAlignment.Center;
@@ -482,7 +505,7 @@ public class DockForm : Form
         if (e.Y < Bar)
         {
             if (e.Button == MouseButtons.Left && ToggleRect.Contains(e.Location)) { ToggleCollapse(); return; }
-            if (e.Button == MouseButtons.Left && MinAllRect.Contains(e.Location)) { MinimizeAll(); return; }
+            if (e.Button == MouseButtons.Left && MinAllRect.Contains(e.Location)) { ToggleAll(); return; }
             if (e.Button == MouseButtons.Left && GearRect.Contains(e.Location)) { BarMenu(new Point(GearRect.Left, Bar)); return; }
             if (e.Button == MouseButtons.Left) { ReleaseCapture(); SendMessage(Handle, 0xA1, (IntPtr)2, IntPtr.Zero); }
             else if (e.Button == MouseButtons.Right) BarMenu(e.Location);
@@ -546,7 +569,7 @@ public class DockForm : Form
     {
         base.OnMouseMove(e);
         string bt = "";
-        if (e.Y < Bar) bt = MinAllRect.Contains(e.Location) ? "Minimize all windows" : GearRect.Contains(e.Location) ? "Settings" : ToggleRect.Contains(e.Location) ? (collapsed ? "Show dock" : "Hide dock") : "";
+        if (e.Y < Bar) bt = MinAllRect.Contains(e.Location) ? (lastAllMin ? "Restore all windows" : "Minimize all windows") : GearRect.Contains(e.Location) ? "Settings" : ToggleRect.Contains(e.Location) ? (collapsed ? "Show dock" : "Hide dock") : "";
         if (bt != barTip) { barTip = bt; tip.SetToolTip(this, bt); }
         int i = e.Y < Bar ? -1 : HitTest(e.Location);
         if (i != hover)
