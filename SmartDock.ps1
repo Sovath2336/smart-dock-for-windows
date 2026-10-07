@@ -2,6 +2,11 @@ param([switch]$Restore)   # -Restore: put every window's taskbar button back, th
 # Floating square window dock: shows open (taskbar-style) windows as a grid of icons.
 # Left-click a tile = bring window to front (restores if minimized). Right-click a tile = close window.
 # Drag the top strip to move. Right-click the strip = auto-hide taskbar toggle / exit. Wheel = scroll.
+# Single instance: a second launch exits quietly (not applied to -Restore)
+if (-not $Restore) {
+    $script:dockMutex = New-Object System.Threading.Mutex($false, 'Local\SmartDockForWindows')
+    if (-not $script:dockMutex.WaitOne(0)) { exit }
+}
 Add-Type -ReferencedAssemblies System.Windows.Forms,System.Drawing -TypeDefinition @'
 using System;
 using System.Collections.Generic;

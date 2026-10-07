@@ -65,6 +65,15 @@ Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-STA','
 
 > The `-STA` flag matters. WinForms and the taskbar COM interface both need a single-threaded apartment.
 
+## 🔁 Start at logon
+
+Press `Win + R`, run `shell:startup`, and drop in a shortcut with:
+
+- **Target:** `powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path	o\SmartDock.ps1"`
+- **Run:** Minimized
+
+Launching it twice is safe: a second instance exits immediately. To stop autostart, delete the shortcut. To stop the running dock, right-click its top strip → **Exit dock**.
+
 ## 🎮 Controls
 
 | Action | What happens |
@@ -97,7 +106,7 @@ This puts back the taskbar button of every eligible window and exits. Windows ar
 
 - **Pinned apps keep their pinned icon.** Windows has no API to remove a pinned launcher. Only the *running-window* buttons are removed.
 - **It does not remember anything between runs.** Position and collapsed state reset on restart. The dock always starts at the bottom-left.
-- **No autostart yet.** Add a shortcut to `shell:startup` if you want one.
+- **Autostart is manual.** See [Start at logon](#-start-at-logon) below.
 - **Primary monitor only** for the initial placement.
 - **Not a shell replacement.** Windows can still re-add a button for a moment (for example when a window changes state). The dock removes it again on the next tick.
 
