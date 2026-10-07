@@ -286,9 +286,11 @@ public class DockForm : Form
         if (!IsWindow(h)) return;
         if (e.Button == MouseButtons.Left)
         {
-            if (IsIconic(h)) ShowWindow(h, 9);
-            SetForegroundWindow(h);
-            lastTarget = h; Invalidate();
+            // Taskbar behaviour: minimized -> restore; already active -> minimize; otherwise -> activate.
+            if (IsIconic(h)) { ShowWindow(h, 9); SetForegroundWindow(h); lastTarget = h; }
+            else if (GetForegroundWindow() == h) { ShowWindow(h, 6); lastTarget = IntPtr.Zero; }
+            else { SetForegroundWindow(h); lastTarget = h; }
+            Invalidate();
         }
         else if (e.Button == MouseButtons.Right)
         {
